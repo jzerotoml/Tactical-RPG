@@ -19,7 +19,8 @@ public class GridManager : MonoBehaviour
             {
                 Vector3 position = new Vector3(x, 0, z);
 
-                Instantiate(tilePrefab, position, Quaternion.identity, transform);
+                GameObject tile = Instantiate(tilePrefab, position, Quaternion.identity, transform);
+                tile.name = $"Tile_{x}_{z}";
             }
         }
     }
