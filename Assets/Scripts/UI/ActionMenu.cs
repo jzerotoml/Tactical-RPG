@@ -11,6 +11,8 @@ public class ActionMenu : MonoBehaviour
 
     private Button[] buttons;
     private int selectedIndex = 0;
+    [Header("References")]
+    [SerializeField] private GridCursor gridCursor;
 
     void Awake()
     {
@@ -68,6 +70,7 @@ public class ActionMenu : MonoBehaviour
         {
             case 0:
                 Debug.Log("Move selected");
+                gridCursor.EnterMovementMode();
                 break;
 
             case 1:
