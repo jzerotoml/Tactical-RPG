@@ -3,10 +3,6 @@ using UnityEngine.InputSystem;
 
 public class GridCursor : MonoBehaviour
 {
-    [Header("Grid Settings")]
-    public int gridWidth = 8;
-    public int gridHeight = 8;
-
     [Header("Movement Settings")]
     public float initialDelay = 0.25f;
     public float repeatInterval = 0.10f;
@@ -44,9 +40,17 @@ public class GridCursor : MonoBehaviour
         if (Keyboard.current == null)
             return;
 
-        // Locked: no player input allowed.
-        if (currentState == CursorState.Locked)
-            return;
+    // Wait until the unit finishes moving.
+    if (currentState == CursorState.Locked)
+    {
+        if (selectedUnit != null && !selectedUnit.IsMoving)
+        {
+            currentState = CursorState.ActionMenu;
+            actionMenu.SetActive(true);
+        }
+
+        return;
+    }
 
         // Cancel or go back.
         if (Keyboard.current.escapeKey.wasPressedThisFrame ||
@@ -102,11 +106,24 @@ public class GridCursor : MonoBehaviour
                 actionMenuController.ConfirmSelection();
                 break;
 
-            case CursorState.Movement:
+case CursorState.Movement:
 
-                Debug.Log($"Movement destination selected: ({x}, {z})");
-                // Actual unit movement will be implemented later.
-                break;
+    if (gridManager.MoveUnit(selectedUnit, x, z))
+    {
+        gridManager.ClearMovementRange();
+
+        currentState = CursorState.Locked;
+
+        previousDirection = Vector2.zero;
+
+        Debug.Log($"Unit moving to ({x}, {z})");
+    }
+    else
+    {
+        Debug.Log("Invalid movement destination");
+    }
+
+    break;
 
             case CursorState.Attack:
 

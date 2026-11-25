@@ -15,7 +15,6 @@ public class GridManager : MonoBehaviour
 void Start()
     {
         occupiedTiles = new Unit[width, height];
-
         GenerateGrid();
         SpawnUnit();
     }
@@ -37,17 +36,13 @@ void Start()
     {
         int x = 2;
         int z = 2;
-
         Vector3 position = new Vector3(x, 0.5f, z);
-
         GameObject unit = Instantiate(
             unitPrefab,
             position,
             Quaternion.identity
         );
-
         unit.name = "Unit_Player_01";
-
         Unit unitScript = unit.GetComponent<Unit>();
         unitScript.SetPosition(x, z);
         occupiedTiles[x, z] = unitScript;
@@ -58,66 +53,87 @@ void Start()
     {
         return false;
     }
-
     return occupiedTiles[x, z] != null;
 }
 
-public Unit GetUnitAt(int x, int z)
-{
-    if (x < 0 || x >= width || z < 0 || z >= height)
+    public Unit GetUnitAt(int x, int z)
     {
-        return null;
-    }
-
-    return occupiedTiles[x, z];
-    
-}
-public void ShowMovementRange(Unit unit)
-{
-    ClearMovementRange();
-
-    if (unit == null || movementOverlayPrefab == null)
-        return;
-
-    for (int x = 0; x < width; x++)
-    {
-        for (int z = 0; z < height; z++)
+        if (x < 0 || x >= width || z < 0 || z >= height)
         {
-            // Ignorar la posición de la unidad.
-            if (x == unit.gridX && z == unit.gridZ)
-                continue;
+            return null;
+        }
+        return occupiedTiles[x, z];
+        
+    }
+        public bool MoveUnit(Unit unit, int targetX, int targetZ)
+    {
+        if (unit == null)
+            return false;
 
-            // Ignorar casillas ocupadas.
-            if (IsTileOccupied(x, z))
-                continue;
+        // Validate grid boundaries.
+        if (targetX < 0 || targetX >= width ||
+            targetZ < 0 || targetZ >= height)
+            return false;
 
-            // Ignorar casillas fuera del rango.
-            if (!unit.CanMoveTo(x, z))
-                continue;
+        // Validate destination occupancy.
+        if (IsTileOccupied(targetX, targetZ))
+            return false;
 
-            Vector3 position = new Vector3(x, 0.12f, z);
+        // Validate movement range.
+        if (!unit.CanMoveTo(targetX, targetZ))
+            return false;
 
-            GameObject overlay = Instantiate(
-                movementOverlayPrefab,
-                position,
-                Quaternion.identity,
-                transform
-            );
+        // Clear previous tile.
+        occupiedTiles[unit.gridX, unit.gridZ] = null;
 
-            movementOverlays.Add(overlay);
+        // Update unit position.
+        unit.SetPosition(targetX, targetZ);
+
+        // Register new occupied tile.
+        occupiedTiles[targetX, targetZ] = unit;
+
+        return true;
+    }
+    public void ShowMovementRange(Unit unit)
+    {
+        ClearMovementRange();
+        if (unit == null || movementOverlayPrefab == null)
+            return;
+        for (int x = 0; x < width; x++)
+        {
+            for (int z = 0; z < height; z++)
+            {
+                // Ignorar la posición de la unidad.
+                if (x == unit.gridX && z == unit.gridZ)
+                    continue;
+                // Ignorar casillas ocupadas.
+                if (IsTileOccupied(x, z))
+                    continue;
+                // Ignorar casillas fuera del rango.
+                if (!unit.CanMoveTo(x, z))
+                    continue;
+                Vector3 position = new Vector3(x, 0.12f, z);
+                GameObject overlay = Instantiate(
+                    movementOverlayPrefab,
+                    position,
+                    Quaternion.identity,
+                    transform
+                );
+                movementOverlays.Add(overlay);
+            }
         }
     }
-}
 
-public void ClearMovementRange()
-{
-    foreach (GameObject overlay in movementOverlays)
+
+
+    public void ClearMovementRange()
     {
-        if (overlay != null)
-            Destroy(overlay);
+        foreach (GameObject overlay in movementOverlays)
+        {
+            if (overlay != null)
+                Destroy(overlay);
+        }
+        movementOverlays.Clear();
     }
-
-    movementOverlays.Clear();
-}
 
 }

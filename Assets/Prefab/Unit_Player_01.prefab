@@ -130,3 +130,4 @@ MonoBehaviour:
   gridX: 2
   gridZ: 2
   movementRange: 3
+  movementSpeed: 4
