@@ -8,15 +8,28 @@ Tactical-RPG is a personal game development project focused on grid-based combat
 
 The project is currently in its early development stage.
 
+## Current Prototype
+
+- The battle scene is configured with a 16×16 grid.
+- One prototype unit can be selected and moved using keyboard controls.
+- Movement uses Manhattan-distance validation, blue range overlays, and direct-line animation.
+- Unit class statistics are defined by ScriptableObject assets, and the prototype prefab uses KnightData.
+- Team identities, combat execution, and turn management are not implemented yet.
+
+## Approved Initial Gameplay
+
+- A 16×16 tactical battlefield.
+- Two opposing teams with six units each.
+- Three unit classes: Knight, Wizard, and Archer.
+- Player vs AI as the initial game mode.
+- Class-specific movement, attack range, damage, and health.
+- Individual turns influenced by unit speed.
+- Units can move and then attack during their turn.
+
 ## Planned Features
 
-- 8×8 tactical battlefield.
-- Two opposing teams with three units each.
-- Three playable classes: Knight, Mage, and Archer.
-- Individual turns determined by unit speed.
-- Class-specific movement, attack range, damage, and health.
-- Flexible move-then-attack or attack-then-move actions.
-- Basic enemy AI.
+- Army deployment and formation selection.
+- Basic enemy combat AI.
 - Health bars and combat feedback.
 - Victory and defeat conditions.
 
@@ -31,7 +44,7 @@ The project is currently in its early development stage.
 
 **Version:** 0.1.0 — Initial Development
 
-The first milestone is to implement a functional 8×8 grid-based battlefield.
+The current prototype provides a grid-based battlefield. The approved initial game target is a 16×16 battlefield; planned gameplay systems are not yet implemented.
 
 ## License
 

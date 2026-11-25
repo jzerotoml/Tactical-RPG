@@ -127,7 +127,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 60c62a94d8c463d43ba84379db4372d7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Unit
+  unitData: {fileID: 11400000, guid: 58fb318a860a403ab20967b35043cb38, type: 2}
   gridX: 2
   gridZ: 2
-  movementRange: 3
-  movementSpeed: 4
+  movementSpeed: 5
