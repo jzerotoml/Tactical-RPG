@@ -2,7 +2,7 @@
 
 **Version:** 0.1.0  
 **Status:** Active Development  
-**Architecture Stage:** F04 implementation in progress; T03 complete
+**Architecture Stage:** F04-T04 and F04-T05 complete; F04-T06 onward pending
 
 ## 1. Technology Stack
 
@@ -58,7 +58,9 @@ This diagram represents the primary gameplay dependencies, not the Unity scene h
 | `width` | Battlefield width |
 | `height` | Battlefield height |
 | `tilePrefab` | Battlefield tile prefab |
-| `unitPrefab` | Prototype unit prefab |
+| `unitPrefabs` | Class-to-prefab mappings for reusable unit prefabs |
+| `unitSpawns` | Configurable team, class, and starting grid position per unit |
+| `unitSpawnHeight` | Visual Y coordinate used when spawning units |
 | `occupiedTiles` | Two-dimensional unit occupancy matrix |
 | `movementOverlayPrefab` | Movement indicator prefab |
 | `movementOverlays` | Active movement indicators |
@@ -67,20 +69,24 @@ This diagram represents the primary gameplay dependencies, not the Unity scene h
 
 | Method | Responsibility |
 |---|---|
-| `Start()` | Initialize occupancy, generate the grid, and spawn the prototype unit |
+| `Start()` | Initialize occupancy, generate the grid, and spawn configured units |
 | `GenerateGrid()` | Instantiate battlefield tiles |
-| `SpawnUnit()` | Instantiate and register the prototype unit |
+| `SpawnConfiguredUnits()` | Instantiate configured units and register their initial occupancy |
+| `TryBuildPrefabMap()` | Validate and map unit classes to reusable prefabs |
+| `ValidateSpawnDefinitions()` | Validate class, team, bounds, and position overlap before spawning |
 | `IsTileOccupied()` | Check tile occupancy |
 | `GetUnitAt()` | Retrieve a unit from a grid position |
-| `MoveUnit()` | Validate and execute a movement request |
-| `ShowMovementRange()` | Display valid movement destinations |
+| `MoveUnit()` | Recalculate and authorize a reachable route, then reserve its destination |
+| `GetReachablePaths()` | Calculate reachable destinations and routes using BFS |
+| `ReconstructPath()` | Rebuild a route from BFS predecessor data |
+| `HandleMovementCompleted()` | Release the origin tile and finalize destination occupancy |
+| `ShowMovementRange()` | Display reachable, unoccupied movement destinations |
 | `ClearMovementRange()` | Remove movement indicators |
 
 #### Current Limitations
 
-- Unit spawning uses hardcoded coordinates and a single prefab.
-- Movement validation does not consider intermediate tiles.
-- Movement validation is partially duplicated across components.
+- Movement uses unit-cost tiles; variable terrain costs and dedicated terrain obstacles are not implemented.
+- Directional path preview is not implemented.
 - Battlefield generation, occupancy management, and visualization share the same component.
 
 ### 3.2 Unit
@@ -94,30 +100,31 @@ This diagram represents the primary gameplay dependencies, not the Unity scene h
 | Field | Purpose |
 |---|---|
 | `unitData` | Shared class statistics |
+| `team` | Individual team identity |
 | `CurrentHealth` | Individual current health initialized from UnitData |
 | `gridX` | Logical X coordinate |
 | `gridZ` | Logical Z coordinate |
 | Movement range | Read from UnitData |
 | `movementSpeed` | Visual movement speed |
 | `targetPosition` | Visual movement destination |
+| `movementPath` | Remaining tile-by-tile route |
+| `movementDestination` | Authorized final grid position |
 | `IsMoving` | Movement animation state |
+| `MovementCompleted` | Event raised after route execution |
 
 #### Current Methods
 
 | Method | Responsibility |
 |---|---|
 | `Awake()` | Initialize the target position and current health |
-| `Update()` | Execute visual movement |
+| `Update()` | Move along the authorized route one tile at a time |
 | `SetPosition()` | Update logical coordinates and visual destination |
-| `CanMoveTo()` | Validate UnitData movement range using Manhattan distance |
+| `SetTeam()` | Assign team identity and update its outline color |
+| `MoveAlongPath()` | Execute a route authorized by GridManager |
 
 #### Current Limitations
 
-- Unit class and base statistics are configured through UnitData, but team identity is not implemented.
 - Combat execution and health changes are not implemented.
-- Movement animation follows a direct line toward the destination.
-- Movement does not follow individual grid tiles.
-- Logical coordinates are updated before visual movement finishes.
 
 ### 3.3 UnitData
 
@@ -156,14 +163,13 @@ The Knight, Wizard, and Archer assets are stored under `Assets/Data/Units/`. Uni
 | `HandleConfirm()` | Process confirmation according to the current state |
 | `HandleCancel()` | Process cancellation |
 | `EnterMovementMode()` | Activate movement selection |
+| `CancelMovementSelection()` | Clear movement overlays and restore the selected unit and action menu |
 | `HandleCursorMovement()` | Process directional keyboard input |
-| `MoveCursor()` | Update cursor position and validate navigation |
+| `MoveCursor()` | Update cursor position while clamping it to battlefield boundaries |
 
 #### Current Limitations
 
 - Unit selection does not distinguish between teams.
-- Movement selection contains duplicated movement validation.
-- Occupied tiles restrict cursor navigation during movement selection.
 - Attack selection does not execute combat logic.
 
 ### 3.4 ActionMenu
@@ -275,39 +281,45 @@ GridManager maintains the occupancy matrix.
 
 ## 6. Current Movement Architecture
 
-### 6.1 Distance Calculation
+### 6.1 Reachability Calculation
 
-The current implementation uses Manhattan distance.
+Every movement step currently costs one point. GridManager uses breadth-first
+search (BFS) to calculate minimum step counts and reconstruct routes.
 
 ```text
-Distance = |targetX - gridX| + |targetZ - gridZ|
+Movement cost = number of orthogonal tiles in the route
 ```
 
-A destination is within movement range when its Manhattan distance does not exceed the unit's movementRange.
+The search respects the unit's Movement Range and battlefield bounds. Allied
+units may be traversed but are not valid destinations. Enemy units block
+traversal. Only reachable, empty tiles other than the origin are valid
+destinations.
 
-This calculation does not account for obstacles or blocked paths.
+BFS provides minimum-cost routes while every step has equal cost. Variable
+terrain costs and dedicated terrain obstacles are not implemented; weighted
+movement will require the planned Dijkstra pathfinder.
 
 ### 6.2 Movement Execution
 
 The current movement sequence is:
 
 1. GridCursor requests movement through GridManager.
-2. GridManager validates the destination.
-3. GridManager clears the previous occupancy entry.
-4. Unit updates its logical coordinates and target position.
-5. GridManager registers the destination occupancy.
-6. GridCursor enters the Locked state.
-7. Unit performs visual movement using Vector3.MoveTowards.
-8. Unit reports movement completion through IsMoving.
-9. GridCursor returns to ActionMenu.
+2. GridManager recalculates reachable routes and rejects destinations not in the result.
+3. GridManager reserves the destination while retaining occupancy of the origin.
+4. GridCursor enters the Locked state, and Unit follows the authorized route one tile at a time using Vector3.MoveTowards.
+5. Unit updates its logical coordinates and raises MovementCompleted after reaching the destination.
+6. GridManager releases the origin tile and finalizes destination occupancy.
+7. GridCursor returns to ActionMenu after movement finishes.
 
 ### 6.3 Movement Visualization
 
-GridManager iterates through battlefield tiles and displays overlays for destinations that:
+GridManager displays overlays for the valid destinations returned by the same
+reachable-route calculation used for movement authorization. Overlays are
+omitted for:
 
-- Are not the selected unit's current position.
-- Are not occupied.
-- Are within the unit's movement range.
+- The selected unit's current position.
+- Allied or enemy occupied tiles.
+- Destinations outside the movement budget or blocked by enemies.
 
 Movement overlays are instantiated from a prefab and tracked in a list for subsequent removal.
 
@@ -355,13 +367,10 @@ ActionMenu manages button selection and navigation.
 
 | ID | Description | Planned Resolution |
 |---|---|---|
-| TD-01 | Movement validation duplicated across components | Feature 04 |
-| TD-02 | Hardcoded prototype unit spawning | Feature 04 |
-| TD-03 | Missing obstacle-aware pathfinding | Feature 04 |
-| TD-04 | Direct-line movement animation | Feature 04 |
-| TD-05 | Occupied tiles restrict movement cursor navigation | Feature 04 |
+| TD-03 | Variable terrain costs and dedicated terrain obstacles are not implemented | Future terrain/pathfinding work |
 | TD-06 | Bidirectional GridCursor and ActionMenu dependency | Future evaluation |
 | TD-07 | Limited encapsulation of public fields | Incremental evaluation |
+| TD-08 | Directional movement path preview is not implemented | Feature 04 |
 
 Technical debt does not automatically authorize refactoring.
 
@@ -373,14 +382,14 @@ The following changes represent architectural objectives, not completed function
 
 ### Feature 04 — Units and Movement
 
-- Support multiple units.
-- Introduce unit classes and team identities.
-- Define unit statistics.
-- Support configurable unit spawning.
-- Centralize movement validation.
-- Introduce obstacle-aware pathfinding.
-- Execute movement along valid grid paths.
-- Maintain consistent movement overlays and destination validation.
+The current implementation provides unit classes and team identities, shared
+unit statistics, configurable multi-unit spawning, BFS-based reachability for
+unit-cost movement, unrestricted cursor navigation within battlefield bounds,
+reachable-destination overlays, and tile-by-tile movement execution with
+occupancy synchronization.
+
+Remaining work includes the approved path preview, variable terrain movement
+costs, dedicated terrain obstacles, and completion of the remaining F04 tasks.
 
 ### Future Features
 

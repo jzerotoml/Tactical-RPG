@@ -28,8 +28,8 @@ Follow a specification-driven development approach:
 3. Identify affected files and dependencies.
 4. Present a concise implementation plan.
 5. Implement only the approved task.
-6. Perform available technical validations.
-7. Report changes and testing results.
+6. Perform a static code review and provide manual validation instructions.
+7. Report changes, static review findings, and any human-reported test results.
 8. Wait for review before proceeding to another task.
 
 Do not automatically proceed to subsequent tasks.
@@ -60,16 +60,13 @@ Do not automatically proceed to subsequent tasks.
 
 ## 6. Testing and Validation
 
-Every implementation must include appropriate validation.
+Compilation, execution, and functional validation in Unity are the exclusive responsibility of the human developer.
 
-- Check for syntax and compilation issues when possible.
-- Identify potential regressions.
-- Provide clear manual testing instructions for Unity.
-- Verify the feature against its acceptance criteria.
+- Agents must not run builds, tests, application execution, or Unity.
+- Agent validation is limited to static code review, including inspection for likely syntax issues, regressions, and consistency with acceptance criteria.
+- Provide clear Unity Inspector configuration and manual testing instructions.
 - Report edge cases and known limitations.
-- Never claim that a test passed unless it was actually executed.
-
-If Unity execution is unavailable, explicitly state which validations require manual testing.
+- Do not claim compilation, execution, or functional tests passed; report human-provided results only.
 
 ## 7. Version Control
 
@@ -99,7 +96,7 @@ After completing an assigned task, provide:
 - Summary of changes.
 - Files created or modified.
 - Important implementation decisions.
-- Validation performed and results.
+- Static review findings and any human-reported compilation, execution, or functional validation results.
 - Required Unity Inspector configuration.
 - Manual testing instructions.
 - Known limitations, blockers, or deviations from the specification.

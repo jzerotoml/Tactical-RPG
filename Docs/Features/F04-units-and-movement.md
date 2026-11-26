@@ -576,7 +576,7 @@ Acceptance:
 
 ### F04-T04 — Team Identity and Unit Prefabs
 
-**Status:** Pending.
+**Status:** Completed.
 
 **Dependencies:** F04-T03.
 
@@ -597,7 +597,7 @@ Required Unity asset creation or prefab configuration must be reported for manua
 
 ### F04-T05 — Multi-Unit Spawning
 
-**Status:** Pending.
+**Status:** Completed.
 
 **Dependencies:** F04-T04.
 
@@ -615,6 +615,16 @@ Acceptance:
 - Six units can belong to each team.
 - Repeated classes are supported.
 - Invalid spawn configurations are rejected safely.
+
+**Manual verification reported by the project owner:**
+
+- Twelve units spawned on the 16×16 battlefield with configurable teams and positions.
+- The formation used two Knights, two Wizards, and two Archers per team.
+- Both team outlines displayed correctly.
+- Reachable movement overlays and unrestricted cursor navigation behaved as expected.
+- Confirming an invalid movement destination returned to the ActionMenu.
+- Movement was verified for Knight (3), Wizard (2), and Archer (2).
+- No compilation or console errors were observed.
 
 ### F04-T06 — Occupancy and Movement Authorization
 

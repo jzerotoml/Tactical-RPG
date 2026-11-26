@@ -11,12 +11,12 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: eed12f77ceb0475c88b026933860eadd, type: 3}
   m_Name: ArcherData
-  m_EditorClassIdentifier:
+  m_EditorClassIdentifier: 
   unitClass: 2
   maxHealth: 80
   attack: 35
   armorPercent: 10
-  movementRange: 4
+  movementRange: 3
   minAttackRange: 2
   maxAttackRange: 5
   initiativeSpeed: 7

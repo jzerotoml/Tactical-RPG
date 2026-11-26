@@ -121,6 +121,7 @@ case CursorState.Movement:
     else
     {
         Debug.Log("Invalid movement destination");
+        CancelMovementSelection();
     }
 
     break;
@@ -149,17 +150,7 @@ case CursorState.Movement:
 
             case CursorState.Movement:
 
-                gridManager.ClearMovementRange();
-                if (selectedUnit != null)
-                {
-                    x = selectedUnit.gridX;
-                    z = selectedUnit.gridZ;
-
-                    transform.position = new Vector3(x, 0.2f, z);
-                }
-
-                currentState = CursorState.ActionMenu;
-                actionMenu.SetActive(true);
+                CancelMovementSelection();
 
                 Debug.Log("Returned to action menu");
                 break;
@@ -173,6 +164,22 @@ case CursorState.Movement:
                 break;
         }
 
+        previousDirection = Vector2.zero;
+    }
+
+    private void CancelMovementSelection()
+    {
+        gridManager.ClearMovementRange();
+
+        if (selectedUnit != null)
+        {
+            x = selectedUnit.gridX;
+            z = selectedUnit.gridZ;
+            transform.position = new Vector3(x, 0.2f, z);
+        }
+
+        currentState = CursorState.ActionMenu;
+        actionMenu.SetActive(true);
         previousDirection = Vector2.zero;
     }
 
@@ -255,22 +262,6 @@ case CursorState.Movement:
             0,
             gridManager.height - 1
         );
-
-        // During movement selection, restrict the cursor
-        // to tiles within the unit's movement range.
-        if (currentState == CursorState.Movement)
-        {
-            if (selectedUnit == null)
-                return;
-
-            if (!selectedUnit.CanMoveTo(newX, newZ))
-                return;
-
-            if (gridManager.IsTileOccupied(newX, newZ) &&
-                (newX != selectedUnit.gridX ||
-                newZ != selectedUnit.gridZ))
-                return;
-        }
 
         x = newX;
         z = newZ;

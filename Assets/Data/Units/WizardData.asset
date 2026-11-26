@@ -11,12 +11,12 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: eed12f77ceb0475c88b026933860eadd, type: 3}
   m_Name: WizardData
-  m_EditorClassIdentifier:
+  m_EditorClassIdentifier: 
   unitClass: 1
   maxHealth: 70
   attack: 45
   armorPercent: 5
-  movementRange: 4
+  movementRange: 2
   minAttackRange: 1
   maxAttackRange: 3
   initiativeSpeed: 5
