@@ -33,24 +33,65 @@ public class GridCursor : MonoBehaviour
         actionMenu.SetActive(false);
 
         transform.position = new Vector3(x, 0.2f, z);
+
+        gridManager.Turns.ActiveUnitChanged += HandleActiveUnitChanged;
+        gridManager.Battle.BattleEnded += HandleBattleEnded;
+        HandleActiveUnitChanged(gridManager.Turns.ActiveUnit);
+    }
+
+    private void OnDestroy()
+    {
+        if (gridManager != null && gridManager.Turns != null)
+            gridManager.Turns.ActiveUnitChanged -= HandleActiveUnitChanged;
+
+        if (gridManager != null && gridManager.Battle != null)
+            gridManager.Battle.BattleEnded -= HandleBattleEnded;
+    }
+
+    private void HandleActiveUnitChanged(Unit unit)
+    {
+        PositionCursorAtUnit(unit);
+    }
+
+    private void HandleBattleEnded()
+    {
+        selectedUnit = null;
+        currentState = CursorState.Exploration;
+        actionMenu.SetActive(false);
+        previousDirection = Vector2.zero;
+    }
+
+    private void PositionCursorAtUnit(Unit unit)
+    {
+        if (unit == null)
+            return;
+
+        x = unit.gridX;
+        z = unit.gridZ;
+        transform.position = new Vector3(x, 0.2f, z);
+        previousDirection = Vector2.zero;
     }
 
     void Update()
     {
-        if (Keyboard.current == null)
-            return;
-
-    // Wait until the unit finishes moving.
-    if (currentState == CursorState.Locked)
-    {
-        if (selectedUnit != null && !selectedUnit.IsMoving)
+        // Wait until the unit finishes moving.
+        if (currentState == CursorState.Locked)
         {
-            currentState = CursorState.ActionMenu;
-            actionMenu.SetActive(true);
+            if (selectedUnit != null && !selectedUnit.IsMoving)
+            {
+                Unit movedUnit = selectedUnit;
+
+                if (!gridManager.Turns.CompleteMove(movedUnit))
+                    Debug.LogError($"Could not consume the move action for '{movedUnit.name}'.");
+
+                ReturnAfterAction(movedUnit);
+            }
+
+            return;
         }
 
-        return;
-    }
+        if (Keyboard.current == null)
+            return;
 
         // Cancel or go back.
         if (Keyboard.current.escapeKey.wasPressedThisFrame ||
@@ -85,14 +126,18 @@ public class GridCursor : MonoBehaviour
         {
             case CursorState.Exploration:
 
-                selectedUnit = gridManager.GetUnitAt(x, z);
+                Unit unitAtCursor = gridManager.GetUnitAt(x, z);
 
-                if (selectedUnit != null)
+                if (unitAtCursor != null && gridManager.Turns.IsActiveUnit(unitAtCursor))
                 {
-                    currentState = CursorState.ActionMenu;
-                    actionMenu.SetActive(true);
+                    selectedUnit = unitAtCursor;
+                    OpenActionMenu();
 
                     Debug.Log($"Selected unit: {selectedUnit.name}");
+                }
+                else if (unitAtCursor != null)
+                {
+                    Debug.Log($"Unit '{unitAtCursor.name}' is not active.");
                 }
                 else
                 {
@@ -106,30 +151,37 @@ public class GridCursor : MonoBehaviour
                 actionMenuController.ConfirmSelection();
                 break;
 
-case CursorState.Movement:
+            case CursorState.Movement:
 
-    if (gridManager.MoveUnit(selectedUnit, x, z))
-    {
-        gridManager.ClearMovementRange();
+                if (!gridManager.Turns.CanMove(selectedUnit))
+                {
+                    Debug.Log("Move action is unavailable.");
+                    CancelMovementSelection();
+                    break;
+                }
 
-        currentState = CursorState.Locked;
+                if (gridManager.MoveUnit(selectedUnit, x, z))
+                {
+                    gridManager.ClearMovementRange();
+                    currentState = CursorState.Locked;
+                    previousDirection = Vector2.zero;
 
-        previousDirection = Vector2.zero;
+                    Debug.Log($"Unit moving to ({x}, {z})");
+                }
+                else
+                {
+                    Debug.Log("Invalid movement destination");
+                    CancelMovementSelection();
+                }
 
-        Debug.Log($"Unit moving to ({x}, {z})");
-    }
-    else
-    {
-        Debug.Log("Invalid movement destination");
-        CancelMovementSelection();
-    }
-
-    break;
+                break;
 
             case CursorState.Attack:
 
-                Debug.Log($"Attack target selected: ({x}, {z})");
-                // Attack logic will be implemented later.
+                if (!gridManager.Combat.TryAttackUnit(selectedUnit, x, z))
+                    Debug.Log($"Invalid attack target at ({x}, {z})");
+
+                CancelAttackSelection();
                 break;
         }
     }
@@ -157,8 +209,7 @@ case CursorState.Movement:
 
             case CursorState.Attack:
 
-                currentState = CursorState.ActionMenu;
-                actionMenu.SetActive(true);
+                CancelAttackSelection();
 
                 Debug.Log("Returned to action menu");
                 break;
@@ -172,20 +223,15 @@ case CursorState.Movement:
         gridManager.ClearMovementRange();
 
         if (selectedUnit != null)
-        {
-            x = selectedUnit.gridX;
-            z = selectedUnit.gridZ;
-            transform.position = new Vector3(x, 0.2f, z);
-        }
+            PositionCursorAtUnit(selectedUnit);
 
-        currentState = CursorState.ActionMenu;
-        actionMenu.SetActive(true);
+        OpenActionMenu();
         previousDirection = Vector2.zero;
     }
 
     public void EnterMovementMode()
     {
-        if (selectedUnit == null)
+        if (selectedUnit == null || !gridManager.Turns.CanMove(selectedUnit))
             return;
 
         currentState = CursorState.Movement;
@@ -197,6 +243,75 @@ case CursorState.Movement:
         previousDirection = Vector2.zero;
 
         Debug.Log("Movement mode activated");
+    }
+
+    public void EnterAttackMode()
+    {
+        if (selectedUnit == null || !gridManager.Turns.CanAttack(selectedUnit))
+            return;
+
+        currentState = CursorState.Attack;
+        actionMenu.SetActive(false);
+        gridManager.Combat.ShowAttackRange(selectedUnit);
+        previousDirection = Vector2.zero;
+
+        Debug.Log("Attack mode activated");
+    }
+
+    private void CancelAttackSelection()
+    {
+        gridManager.Combat.ClearAttackRange();
+        ReturnAfterAction(selectedUnit);
+        previousDirection = Vector2.zero;
+    }
+
+    public void WaitActiveUnit()
+    {
+        Unit waitingUnit = selectedUnit;
+
+        if (waitingUnit == null || !gridManager.Turns.EndTurn(waitingUnit))
+        {
+            Debug.Log("Wait action was rejected.");
+            return;
+        }
+
+        Debug.Log($"Unit '{waitingUnit.name}' ended its turn.");
+        selectedUnit = null;
+        currentState = CursorState.Exploration;
+        actionMenu.SetActive(false);
+        previousDirection = Vector2.zero;
+    }
+
+    private void OpenActionMenu()
+    {
+        if (selectedUnit == null || !gridManager.Turns.IsActiveUnit(selectedUnit))
+        {
+            ReturnAfterAction(selectedUnit);
+            return;
+        }
+
+        actionMenuController.SetActionAvailability(
+            gridManager.Turns.CanMove(selectedUnit),
+            gridManager.Turns.CanAttack(selectedUnit)
+        );
+        currentState = CursorState.ActionMenu;
+        actionMenu.SetActive(true);
+    }
+
+    private void ReturnAfterAction(Unit actingUnit)
+    {
+        PositionCursorAtUnit(gridManager.Turns.ActiveUnit);
+
+        if (actingUnit != null && gridManager.Turns.IsActiveUnit(actingUnit))
+        {
+            selectedUnit = actingUnit;
+            OpenActionMenu();
+            return;
+        }
+
+        selectedUnit = null;
+        currentState = CursorState.Exploration;
+        actionMenu.SetActive(false);
     }
 
     void HandleCursorMovement()

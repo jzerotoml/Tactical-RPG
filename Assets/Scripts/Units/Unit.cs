@@ -26,10 +26,13 @@ public class Unit : MonoBehaviour
     private Vector2Int movementDestination;
 
     public bool IsMoving { get; private set; }
+    public bool IsDefeated => CurrentHealth <= 0;
     public UnitData Data => unitData;
     public Team Team => team;
     public int CurrentHealth { get; private set; }
     internal event Action<Unit, Vector2Int> MovementCompleted;
+    internal event Action<Unit> Defeated;
+    private bool defeatReported;
 
     private void Awake()
     {
@@ -102,6 +105,23 @@ public class Unit : MonoBehaviour
         SetNextMovementTarget();
         IsMoving = true;
         return true;
+    }
+
+    internal int ApplyDamage(int damage)
+    {
+        if (damage <= 0 || CurrentHealth <= 0)
+            return 0;
+
+        int appliedDamage = Mathf.Min(damage, CurrentHealth);
+        CurrentHealth -= appliedDamage;
+
+        if (IsDefeated && !defeatReported)
+        {
+            defeatReported = true;
+            Defeated?.Invoke(this);
+        }
+
+        return appliedDamage;
     }
 
     private void SetNextMovementTarget()

@@ -2,7 +2,7 @@
 
 **Version:** 0.1.0  
 **Status:** Active Development  
-**Architecture Stage:** F04-T04 and F04-T05 complete; F04-T06 onward pending
+**Architecture Stage:** F06 Alpha 0.1.0 core manually validated (line of sight pending); F07 Alpha 0.1.0 core manually validated; F09 Alpha 0.1.0 KO/winner core manually validated
 
 ## 1. Technology Stack
 
@@ -22,7 +22,8 @@
 
 The current architecture follows Unity's component-based development model.
 
-Gameplay functionality is distributed across MonoBehaviour components, with communication through direct references and public methods.
+Gameplay functionality is distributed across MonoBehaviour components and
+plain C# services, with communication through direct references and events.
 
 The current implementation prioritizes simplicity, readability, and incremental development.
 
@@ -35,13 +36,20 @@ Player Input
 GridCursor <------> ActionMenu
      |
      v
-GridManager
-     |
+GridManager ------> TurnManager
+     | \
+     |  +-------------> BattleManager
      v
-    Unit ------> UnitData
+CombatSystem -------> Unit ------> UnitData
 ```
 
 This diagram represents the primary gameplay dependencies, not the Unity scene hierarchy.
+
+GridManager composes BattleManager, TurnManager, and CombatSystem. Unit reports
+defeat to GridManager, which clears occupancy and notifies BattleManager before
+removing the unit from turn order. BattleManager's `BattleEnded` event causes GridManager to stop turns and clean
+overlays; GridCursor closes ActionMenu. GridManager exposes BattleManager's
+read-only result properties and event for future presentation components.
 
 ## 3. Core Components
 
@@ -49,7 +57,7 @@ This diagram represents the primary gameplay dependencies, not the Unity scene h
 
 **File:** `GridManager.cs`
 
-**Responsibility:** Battlefield generation, unit registration, tile occupancy, movement validation, and movement visualization.
+**Responsibility:** Battlefield generation, unit registration, tile occupancy, movement validation, and spatial queries.
 
 #### Current Data
 
@@ -64,22 +72,36 @@ This diagram represents the primary gameplay dependencies, not the Unity scene h
 | `occupiedTiles` | Two-dimensional unit occupancy matrix |
 | `movementOverlayPrefab` | Movement indicator prefab |
 | `movementOverlays` | Active movement indicators |
+| `attackOverlayPrefab` | Shared source for attack-range overlays and the active-unit indicator |
+| Active unit indicator | Single persistent yellow instance of `AttackOverlay` |
+| `defeatedUnits` | Units whose KO has already been processed |
+| `Combat` | CombatSystem service initialized in `Awake()` |
+| `Turns` | TurnManager service initialized in `Awake()` |
+| `Battle` | BattleManager service initialized in `Awake()` |
 
 #### Current Methods
 
 | Method | Responsibility |
 |---|---|
-| `Start()` | Initialize occupancy, generate the grid, and spawn configured units |
+| `Awake()` | Create gameplay services and subscribe to battle and active-unit events |
+| `Start()` | Initialize occupancy, generate the grid, spawn units, initialize BattleManager, then TurnManager |
 | `GenerateGrid()` | Instantiate battlefield tiles |
-| `SpawnConfiguredUnits()` | Instantiate configured units and register their initial occupancy |
+| `SpawnConfiguredUnits()` | Instantiate units, subscribe to defeat events, and register occupancy |
 | `TryBuildPrefabMap()` | Validate and map unit classes to reusable prefabs |
 | `ValidateSpawnDefinitions()` | Validate class, team, bounds, and position overlap before spawning |
 | `IsTileOccupied()` | Check tile occupancy |
 | `GetUnitAt()` | Retrieve a unit from a grid position |
-| `MoveUnit()` | Recalculate and authorize a reachable route, then reserve its destination |
+| `GetRegisteredUnits()` | Return units currently registered in the occupancy grid |
+| `IsWithinBoard()` | Check whether grid coordinates are inside the battlefield |
+| `MoveUnit()` | Reject defeated units or a finished battle, then authorize and reserve a reachable route |
 | `GetReachablePaths()` | Calculate reachable destinations and routes using BFS |
 | `ReconstructPath()` | Rebuild a route from BFS predecessor data |
-| `HandleMovementCompleted()` | Release the origin tile and finalize destination occupancy |
+| `HandleMovementCompleted()` | Finalize occupancy and reposition the indicator after movement |
+| `HandleUnitDefeated()` | Process each KO once, clear occupancy, report it, and destroy the unit |
+| `ClearUnitOccupancy()` | Release every occupied tile reference to a unit |
+| `HandleBattleEnded()` | Stop turns and clear action and active-unit overlays |
+| `HandleActiveUnitChanged()` | Show or reposition the active-unit indicator |
+| `UpdateActiveUnitIndicator()` | Keep the indicator on the active unit's current tile |
 | `ShowMovementRange()` | Display reachable, unoccupied movement destinations |
 | `ClearMovementRange()` | Remove movement indicators |
 
@@ -89,11 +111,92 @@ This diagram represents the primary gameplay dependencies, not the Unity scene h
 - Directional path preview is not implemented.
 - Battlefield generation, occupancy management, and visualization share the same component.
 
-### 3.2 Unit
+### 3.2 CombatSystem
+
+**File:** `CombatSystem.cs`
+
+**Responsibility:** Attack range calculation, target validation, immediate damage resolution, and AttackOverlay lifecycle.
+
+CombatSystem is a plain C# service created by GridManager. It reads unit
+occupancy and board bounds through GridManager spatial queries, while Unit
+remains responsible for changing its own current health.
+
+#### Current Methods
+
+| Method | Responsibility |
+|---|---|
+| `TryAttackUnit()` | Validate and resolve an attack against an in-range enemy |
+| `IsWithinAttackRange()` | Check a tile against the attacker's configured Manhattan range |
+| `ShowAttackRange()` | Display tiles within the unit's configured Manhattan range |
+| `ClearAttackRange()` | Remove active attack overlays |
+
+#### Current Limitations
+
+- F06 remains partially implemented; line of sight is deferred.
+
+### 3.3 TurnManager
+
+**File:** `TurnManager.cs`
+
+**Responsibility:** Build turn order, track the active unit and available
+actions, remove defeated units, and advance rounds.
+
+TurnManager is a plain C# service initialized by GridManager after unit
+spawning. It receives the registered units; turn rules remain in this service,
+not in GridManager. It sorts by Initiative Speed and alternates teams within
+equal-speed groups, starting each round with the current priority team. The
+initial priority is random and switches at each new round.
+
+TurnManager publishes `ActiveUnitChanged` when a unit becomes active. GridManager
+uses the event to update the persistent board indicator, and GridCursor uses it
+to position the cursor at the start of the battle and on each new turn.
+
+#### Current Methods
+
+| Method | Responsibility |
+|---|---|
+| `BeginBattle()` | Randomize initial team priority and create the first round |
+| `CanMove()` / `CanAttack()` | Check whether the active unit may use an action |
+| `CompleteMove()` / `CompleteAttack()` | Consume a valid action and advance if both are spent |
+| `EndTurn()` | End the active unit's turn when Wait is selected |
+| `RemoveUnit()` | Remove a defeated unit from the current and future turn orders |
+| `StopBattle()` | Clear the active unit and prevent further turn progression |
+| `ActiveUnitChanged` | Notify presentation components when the active unit changes |
+
+#### Current Limitations
+
+- Turn animations are not implemented.
+
+### 3.4 BattleManager
+
+**File:** `BattleManager.cs`
+
+**Responsibility:** Track living units, determine battle completion, and expose
+the winning team.
+
+BattleManager is a plain C# service composed by GridManager. It tracks the
+initial living roster and removes each defeated unit from that set once. When
+a team has no living units, it stores `IsFinished` and `Winner` (null until a
+result exists), logs the winner, and raises `BattleEnded`. GridManager handles
+this event before the turn order can advance.
+
+#### Current Methods
+
+| Method | Responsibility |
+|---|---|
+| `BeginBattle()` | Initialize the living roster and detect a missing team |
+| `RegisterUnitDefeated()` | Remove a defeated unit and evaluate victory |
+| `FinishBattle()` | Store and log the winner, then notify listeners |
+
+#### Current Limitations
+
+- Draw handling, result interfaces, menus, and battle restart are not implemented.
+
+### 3.5 Unit
 
 **File:** `Unit.cs`
 
-**Responsibility:** Individual unit position and visual movement.
+**Responsibility:** Individual health, position, defeat notification, and visual movement.
 
 #### Current Data
 
@@ -110,7 +213,9 @@ This diagram represents the primary gameplay dependencies, not the Unity scene h
 | `movementPath` | Remaining tile-by-tile route |
 | `movementDestination` | Authorized final grid position |
 | `IsMoving` | Movement animation state |
+| `IsDefeated` | Whether current health has reached zero |
 | `MovementCompleted` | Event raised after route execution |
+| `Defeated` | One-time event raised when current health reaches zero |
 
 #### Current Methods
 
@@ -121,12 +226,13 @@ This diagram represents the primary gameplay dependencies, not the Unity scene h
 | `SetPosition()` | Update logical coordinates and visual destination |
 | `SetTeam()` | Assign team identity and update its outline color |
 | `MoveAlongPath()` | Execute a route authorized by GridManager |
+| `ApplyDamage()` | Reduce this unit's health and report defeat once without modifying UnitData |
 
 #### Current Limitations
 
-- Combat execution and health changes are not implemented.
+- Board removal is delegated to GridManager after the `Defeated` event.
 
-### 3.3 UnitData
+### 3.6 UnitData
 
 **File:** `UnitData.cs`
 
@@ -136,7 +242,7 @@ UnitData stores the class, maximum health, attack, armor, movement range, attack
 
 The Knight, Wizard, and Archer assets are stored under `Assets/Data/Units/`. Unit prefabs must reference the corresponding asset in the Inspector.
 
-### 3.4 GridCursor
+### 3.7 GridCursor
 
 **File:** `GridCursor.cs`
 
@@ -158,21 +264,25 @@ The Knight, Wizard, and Archer assets are stored under `Assets/Data/Units/`. Uni
 
 | Method | Responsibility |
 |---|---|
-| `Start()` | Initialize cursor and menu references |
+| `Start()` | Initialize cursor and menu references, then synchronize to the active unit |
+| `HandleActiveUnitChanged()` | Move the cursor to the active unit |
+| `HandleBattleEnded()` | Clear selection and close ActionMenu |
+| `PositionCursorAtUnit()` | Synchronize logical and visual cursor coordinates |
 | `Update()` | Process player input |
 | `HandleConfirm()` | Process confirmation according to the current state |
 | `HandleCancel()` | Process cancellation |
 | `EnterMovementMode()` | Activate movement selection |
+| `EnterAttackMode()` | Activate attack target selection through CombatSystem |
 | `CancelMovementSelection()` | Clear movement overlays and restore the selected unit and action menu |
+| `WaitActiveUnit()` | End the active unit's turn |
 | `HandleCursorMovement()` | Process directional keyboard input |
 | `MoveCursor()` | Update cursor position while clamping it to battlefield boundaries |
 
 #### Current Limitations
 
 - Unit selection does not distinguish between teams.
-- Attack selection does not execute combat logic.
 
-### 3.4 ActionMenu
+### 3.8 ActionMenu
 
 **File:** `ActionMenu.cs`
 
@@ -193,13 +303,13 @@ The Knight, Wizard, and Archer assets are stored under `Assets/Data/Units/`. Uni
 | `Update()` | Process menu navigation input |
 | `SelectNext()` | Select the next action |
 | `SelectPrevious()` | Select the previous action |
+| `SetActionAvailability()` | Disable actions already consumed this turn |
 | `ConfirmSelection()` | Execute the selected action |
 | `UpdateSelection()` | Update visual button selection |
 
 #### Current Limitations
 
 - Actions are associated with button array indices.
-- Attack and Wait are placeholders.
 - The component has a bidirectional dependency with GridCursor.
 
 ## 4. Interaction State Machine
@@ -211,7 +321,7 @@ Player interaction is controlled through `CursorState`.
 | `Exploration` | Navigate the battlefield and select units |
 | `ActionMenu` | Select an available action |
 | `Movement` | Select a movement destination |
-| `Attack` | Reserved for attack target selection |
+| `Attack` | Navigate freely and select an enemy within attack range |
 | `Locked` | Prevent interaction during movement animation |
 
 ### Current Movement Flow
@@ -238,7 +348,79 @@ ActionMenu
 
 Movement cancellation returns the cursor to the selected unit's position and reopens the action menu.
 
-Cancelling the action menu returns the player to Exploration.
+Only the active unit can open the action menu. Cursor navigation remains free
+throughout the battlefield.
+
+Attack selection displays the configured Manhattan range through CombatSystem.
+A valid enemy target receives immediate damage; invalid confirmation or
+Backspace returns to the action menu and clears the attack indicators.
+
+### Current Attack Flow
+
+```text
+ActionMenu
+     |
+     | Select Attack
+     v
+Attack
+     |
+     | Confirm valid enemy
+     v
+CombatSystem validates and resolves the attack
+     |
+     v
+ActionMenu
+```
+
+### Manual Combat Validation (Project Owner Report)
+
+The project owner reports these manual checks passed:
+
+- Attack ranges were correct.
+- Damage accumulated independently per Unit instance.
+- Current health was limited to zero.
+- Allied units were rejected as targets.
+- Combat worked for both teams.
+
+After the CombatSystem refactor, the project owner confirmed that these same
+manual combat checks remained successful.
+
+These checks validate the implemented Alpha 0.1.0 slice only; F06 remains
+partially complete.
+
+### Current Turn Flow
+
+TurnManager owns the active unit and action availability. A valid Move and
+Attack may occur in either order; Wait ends the turn, and using both actions
+advances automatically. At the end of a round, the team priority switches.
+
+The active-unit event keeps one yellow indicator over the active unit's tile.
+GridCursor positions itself on the active unit at startup and when turns
+change; after Move or Attack, it returns to the current active unit. Navigation
+remains free in Exploration, Movement, and Attack.
+
+When a unit reaches zero HP, Unit raises `Defeated`. GridManager clears its
+occupancy, BattleManager evaluates victory, and TurnManager removes the unit
+from its order. If that KO ends the battle, BattleManager's event stops
+TurnManager before any next-turn advancement, closes ActionMenu, and clears
+movement, attack, and active-unit overlays.
+
+### Manual Turn and Indicator Validation (Project Owner Report)
+
+The project owner reports that F07 manual tests passed and that turn order and
+action restrictions work correctly. The owner also reports that active-unit
+indicator and automatic cursor-positioning tests passed.
+
+### Manual Battle Resolution Validation
+
+The project owner reports that the final manual checks passed:
+
+- Units disappear when they reach zero HP.
+- Unit defeat works for both teams.
+- The battle ends when only one team has living units, and further actions stop.
+
+These are project-owner-reported Unity results; no compilation or tests were
+run by the documentation update.
 
 ## 5. Battlefield Representation
 
@@ -391,16 +573,14 @@ occupancy synchronization.
 Remaining work includes the approved path preview, variable terrain movement
 costs, dedicated terrain obstacles, and completion of the remaining F04 tasks.
 
-### Future Features
+### Remaining Features
 
-- Combat resolution.
-- Health and damage management.
-- Turn management.
-- Initiative calculation.
-- Action availability management.
-- Victory and defeat detection.
-- Local multiplayer.
-- Network multiplayer.
+- Deployment and battle AI.
+- Line of sight; counterattacks are not part of the current combat rules.
+- Draw handling, victory/defeat presentation, main menu, and battle restart.
+- Health bars and unit-statistics UI.
+- Attack and unit-defeat animations, plus visual and camera improvements.
+- Local multiplayer and network multiplayer.
 
 Specific components, algorithms, and data structures must be approved through feature specifications before implementation.
 

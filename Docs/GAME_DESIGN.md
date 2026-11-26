@@ -1,6 +1,6 @@
 # Tactical-RPG — Game Design Document
 
-**Version:** 0.2.0  
+**Version:** 0.2.1
 **Status:** Active Development  
 **Genre:** Turn-Based Tactical RPG
 
@@ -143,7 +143,7 @@ Initial visual representation: triangular geometry.
 | Armor (%) | 20 | 5 | 10 |
 | Movement Range | 3 | 4 | 4 |
 | Minimum Attack Range | 1 | 1 | 2 |
-| Maximum Attack Range | 1 | 3 | 5 |
+| Maximum Attack Range | 1 | 2 | 3 |
 | Speed | 3 | 5 | 7 |
 
 These values represent the initial balance configuration and may change following gameplay testing.
@@ -468,11 +468,14 @@ The destination remains reserved throughout movement execution.
 
 ## 11. Combat System
 
-**Implementation Status:** Planned — F06.
+**Implementation Status:** Alpha 0.1.0 combat core implemented and manually validated; F06 remains partial while line of sight is deferred.
 
 ### 11.1 Attack Rules
 
-Units may attack enemy units within their permitted attack range.
+Units may attack enemy units within their configured attack range.
+
+Attack distance is the Manhattan distance between the units' grid coordinates:
+`abs(delta X) + abs(delta Z)`.
 
 Friendly fire is not supported in the initial combat design.
 
@@ -480,7 +483,7 @@ Counterattacks are not supported.
 
 Archers cannot attack adjacent units because their minimum attack range is two.
 
-Attack distance calculation and line-of-sight rules remain pending.
+Line-of-sight rules remain pending.
 
 ### 11.2 Damage Calculation
 
@@ -491,6 +494,7 @@ The initial damage formula is:
 Final damage must be represented as an integer.
 
 Fractional damage is rounded to the nearest integer, with halfway values rounded upward.
+The applied damage and target's remaining current health are reported through `Debug.Log`.
 
 Example:
 
@@ -506,19 +510,21 @@ Damage reduces the target's current health.
 
 Current health must not fall below zero.
 
-Unit elimination behavior will be defined during combat system development.
+When current health reaches zero, a unit is defeated once, removed from board
+occupancy and the turn order, and removed from the battlefield. It can no
+longer act, be selected, or be targeted.
 
 Armor limits and minimum damage rules remain pending.
 
 ## 12. Turn System
 
-**Implementation Status:** Planned — F07.
+**Implementation Status:** Alpha 0.1.0 turn-system core implemented and manually validated; turn animations remain deferred.
 
-The game uses individual unit turns.
+The game uses individual unit turns. Units are ordered by Initiative Speed,
+from highest to lowest.
 
-The Speed attribute influences turn initiative.
-
-The exact initiative calculation remains pending.
+Units with equal speed alternate between teams when possible. The team
+priority for ties is chosen randomly at battle start and alternates each round.
 
 ### 12.1 Available Actions
 
@@ -528,27 +534,26 @@ The exact initiative calculation remains pending.
 
 ### 12.2 Action Rules
 
-A unit may move and then attack during its turn.
+A unit may move once and attack once during its turn, in either order.
 
-Attacking ends the unit's turn automatically.
+An action is consumed only after a valid move completes or a valid attack
+resolves. Cancelled or invalid actions do not consume the action.
 
-Moving after attacking is not permitted.
+The turn ends automatically after both Move and Attack have been consumed.
 
-Waiting voluntarily ends the unit's turn.
+Wait ends the active unit's turn immediately.
 
-If Wait is the only remaining available action, the turn ends automatically.
+Only the active unit may execute actions. Battlefield cursor navigation
+remains unrestricted.
+
+Units with zero current health are removed from the board and turn order. The
+battle ends when a team has no living units; BattleManager records the winner.
 
 Counterattacks are not supported.
 
-### 12.3 Development Exception
+### 12.3 Deferred Turn Features
 
-Until turn management is implemented:
-
-- Units from either team may be selected.
-- Consecutive movement actions are permitted.
-- Action availability is not restricted by turn state.
-
-These exceptions exist exclusively to facilitate development and testing.
+Turn animations remain outside the Alpha 0.1.0 scope.
 
 ## 13. Player Controls
 
@@ -599,6 +604,7 @@ The interface must prioritize readability and clear gameplay feedback.
 |---|---|
 | Blue | Movement range and Blue team identity |
 | Red | Attack range and Red team identity |
+| Yellow | Active unit indicator |
 | Green | Valid deployment positions |
 | White | Cursor and neutral selection |
 
@@ -606,16 +612,19 @@ Movement path indicators may use white or green depending on visual testing.
 
 ### 15.2 Battle Interface
 
-Planned battle information includes:
+Implemented in the Alpha 0.1.0 prototype:
 
-- Selected unit.
-- Current health.
-- Unit statistics.
-- Available actions.
-- Active turn indicator.
-- Turn order.
-- Movement range.
-- Attack range.
+- Action menu with Move, Attack, and Wait, with availability based on the active unit's remaining actions.
+- Movement and attack range overlays.
+- One persistent yellow indicator for the active unit.
+
+Still pending:
+
+- Health bars and unit-statistics information.
+- A visual turn-order display.
+- Victory and defeat screens.
+- Attack and unit-defeat animations.
+- Visual and camera improvements.
 
 ### 15.3 Action Menu
 
@@ -625,11 +634,13 @@ The battle action menu contains:
 - Attack.
 - Wait.
 
-Action availability will depend on the unit's current turn state once turn management is implemented.
+Action availability depends on the active unit's remaining actions.
 
 ## 16. Game Modes
 
 ### 16.1 Player vs AI
+
+**Implementation Status:** Planned — F05 deployment and F08 battle AI.
 
 The initial playable game mode.
 
@@ -657,11 +668,18 @@ Networking architecture and synchronization rules remain undefined.
 
 ## 17. Battle Resolution
 
-**Implementation Status:** Planned — F09.
+**Implementation Status:** Alpha 0.1.0 knockout and winner-detection core implemented and manually validated; result presentation and restart remain pending.
 
-The game must eventually determine victory, defeat, and battle completion.
+Victory is declared when one team has no living units. The opposing team is the
+winner. BattleManager stores the finished state and winning team, logs the
+result, and stops turn progression.
 
-Exact victory conditions, draw conditions, and result presentation remain pending.
+Draw handling, victory/defeat interfaces, a main menu, and battle restart remain
+outside the Alpha 0.1.0 scope.
+
+The project owner reports that units disappear at zero HP, defeat works for
+both teams, and the battle ends and blocks actions when only one team has
+living units. See ARCHITECTURE.md for the recorded manual validation report.
 
 ## 18. Balance Considerations
 
@@ -686,12 +704,12 @@ Class composition restrictions must not be introduced without an approved design
 
 | Feature | Name | Status |
 |---|---|---|
-| F04 | Units and Movement | Specified |
+| F04 | Units and Movement | In progress — movement prototype exists; Dijkstra pathfinding, path preview, and remaining F04 tasks are pending |
 | F05 | Deployment System | Planned |
-| F06 | Combat System | Planned |
-| F07 | Turn System | Planned |
+| F06 | Combat System | In progress — Alpha 0.1.0 combat core validated; line of sight remains pending |
+| F07 | Turn System | Alpha 0.1.0 core implemented and manually validated; turn animations remain pending |
 | F08 | Battle AI | Planned |
-| F09 | Battle Resolution | Planned |
+| F09 | Battle Resolution | Alpha 0.1.0 KO and winner detection implemented and manually validated; UI, draw handling, and restart remain pending |
 
 Additional features:
 
@@ -709,13 +727,15 @@ Roadmap identifiers and priorities may evolve through approved planning decision
 - Final movement path indicator color.
 - Exact AI formation positions.
 - Red team deployment coordinate orientation.
-- Attack distance calculation.
 - Line-of-sight rules.
-- Initiative calculation.
 - Armor limits.
 - Minimum damage rules.
-- Unit elimination behavior.
-- Victory and draw conditions.
+- Draw handling and victory/defeat presentation.
+- Battle restart behavior.
+- Main menu.
+- Health bars and unit information.
+- Attack and unit-defeat animations.
+- Visual and camera improvements.
 - Enemy unit inspection.
 - Observation mode key.
 - Terrain movement costs.
@@ -732,6 +752,10 @@ Planned functionality must not be represented as implemented functionality.
 Changes to gameplay rules require project owner approval.
 
 ## 22. Change Log
+
+| Version | Description |
+|---|---|
+| 0.2.1 | Recorded the Alpha 0.1.0 battle-core implementation and owner-reported manual validation; clarified remaining work. |
 
 | Version | Description |
 |---|---|

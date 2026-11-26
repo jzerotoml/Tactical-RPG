@@ -18,5 +18,5 @@ MonoBehaviour:
   armorPercent: 5
   movementRange: 2
   minAttackRange: 1
-  maxAttackRange: 3
+  maxAttackRange: 2
   initiativeSpeed: 5

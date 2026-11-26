@@ -25,48 +25,58 @@ public class ActionMenu : MonoBehaviour
     }
 
     void OnEnable()
-{
-    selectedIndex = 0;
-
-    if (buttons != null && buttons.Length > 0 && buttons[0] != null)
     {
-        buttons[0].Select();
+        selectedIndex = -1;
+        MoveSelection(1);
     }
-}
 
     void Update()
-{
-    if (Keyboard.current == null)
-        return;
-
-    if (Keyboard.current.sKey.wasPressedThisFrame ||
-        Keyboard.current.downArrowKey.wasPressedThisFrame)
     {
-        SelectNext();
-    }
+        if (Keyboard.current == null)
+            return;
 
-    if (Keyboard.current.wKey.wasPressedThisFrame ||
-        Keyboard.current.upArrowKey.wasPressedThisFrame)
-    {
-        SelectPrevious();
+        if (Keyboard.current.sKey.wasPressedThisFrame ||
+            Keyboard.current.downArrowKey.wasPressedThisFrame)
+        {
+            SelectNext();
+        }
+
+        if (Keyboard.current.wKey.wasPressedThisFrame ||
+            Keyboard.current.upArrowKey.wasPressedThisFrame)
+        {
+            SelectPrevious();
+        }
     }
-}
 
     public void SelectNext()
     {
-        selectedIndex = (selectedIndex + 1) % buttons.Length;
-        UpdateSelection();
+        MoveSelection(1);
     }
 
     public void SelectPrevious()
     {
-        selectedIndex = (selectedIndex - 1 + buttons.Length) % buttons.Length;
-        UpdateSelection();
+        MoveSelection(-1);
+    }
+
+    public void SetActionAvailability(bool canMove, bool canAttack)
+    {
+        moveButton.interactable = canMove;
+        attackButton.interactable = canAttack;
+        waitButton.interactable = true;
+
+        if (!IsButtonAvailable(selectedIndex))
+        {
+            selectedIndex = -1;
+            MoveSelection(1);
+        }
     }
 
     public void ConfirmSelection()
-{
-    switch (selectedIndex)
+    {
+        if (!IsButtonAvailable(selectedIndex))
+            return;
+
+        switch (selectedIndex)
         {
             case 0:
                 Debug.Log("Move selected");
@@ -75,15 +85,48 @@ public class ActionMenu : MonoBehaviour
 
             case 1:
                 Debug.Log("Attack selected");
+                gridCursor.EnterAttackMode();
                 break;
 
             case 2:
                 Debug.Log("Wait selected");
+                gridCursor.WaitActiveUnit();
                 break;
         }
     }
+
     private void UpdateSelection()
     {
-        buttons[selectedIndex].Select();
+        if (IsButtonAvailable(selectedIndex))
+            buttons[selectedIndex].Select();
+    }
+
+    private bool IsButtonAvailable(int index)
+    {
+        return buttons != null &&
+            index >= 0 &&
+            index < buttons.Length &&
+            buttons[index] != null &&
+            buttons[index].interactable;
+    }
+
+    private void MoveSelection(int direction)
+    {
+        if (buttons == null || buttons.Length == 0)
+            return;
+
+        int candidate = selectedIndex;
+
+        for (int i = 0; i < buttons.Length; i++)
+        {
+            candidate = (candidate + direction + buttons.Length) % buttons.Length;
+
+            if (buttons[candidate] == null || !buttons[candidate].interactable)
+                continue;
+
+            selectedIndex = candidate;
+            UpdateSelection();
+            return;
+        }
     }
 }

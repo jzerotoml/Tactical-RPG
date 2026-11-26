@@ -8,13 +8,18 @@ Tactical-RPG is a personal game development project focused on grid-based combat
 
 The project is currently in its early development stage.
 
-## Current Prototype
+## Alpha 0.1.0 Battle Core
 
-- The battle scene is configured with a 16×16 grid.
-- One prototype unit can be selected and moved using keyboard controls.
-- Movement uses Manhattan-distance validation, blue range overlays, and direct-line animation.
-- Unit class statistics are defined by ScriptableObject assets, and the prototype prefab uses KnightData.
-- Team identities, combat execution, and turn management are not implemented yet.
+- The battle scene uses a configurable 16×16 grid and supports configured units for both teams.
+- Unit class statistics are stored in `UnitData`; current health belongs to each `Unit` instance.
+- The cursor can explore the board freely, while only the active unit can act.
+- A unit may move once and attack once per turn, in either order. Wait ends the turn.
+- Movement and attack ranges are displayed with overlays. A persistent yellow indicator marks the active unit.
+- Attacks use configured Manhattan ranges and resolve damage immediately.
+- Units reaching zero HP are removed from the board. The battle ends when one team has no living units, and further actions are blocked.
+- Damage, remaining HP, and the winning team are reported through `Debug.Log`.
+
+The project owner reports successful manual validation of combat ranges and damage, turn and action restrictions, the active-unit indicator, unit defeat, and battle end when only one team remains. No compilation or automated test results are claimed here.
 
 ## Approved Initial Gameplay
 
@@ -24,14 +29,16 @@ The project is currently in its early development stage.
 - Player vs AI as the initial game mode.
 - Class-specific movement, attack range, damage, and health.
 - Individual turns influenced by unit speed.
-- Units can move and then attack during their turn.
+- Units can move and attack once each during their turn, in either order; Wait ends the turn.
 
-## Planned Features
+## Pending Features
 
 - Army deployment and formation selection.
 - Basic enemy combat AI.
-- Health bars and combat feedback.
-- Victory and defeat conditions.
+- Victory and defeat presentation, main menu, and battle restart.
+- Health bars and unit information.
+- Attack and unit-defeat animations.
+- Line-of-sight rules, visual improvements, and camera enhancements.
 
 ## Technologies
 
@@ -42,9 +49,9 @@ The project is currently in its early development stage.
 
 ## Development Status
 
-**Version:** 0.1.0 — Initial Development
+**Version:** 0.1.0 — Alpha battle core implemented
 
-The current prototype provides a grid-based battlefield. The approved initial game target is a 16×16 battlefield; planned gameplay systems are not yet implemented.
+The Alpha 0.1.0 battle core includes movement, combat, individual turns, unit defeat, and winner detection. Deployment, AI, and the presentation features listed above remain pending.
 
 ## License
 

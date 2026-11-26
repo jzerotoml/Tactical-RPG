@@ -30,27 +30,17 @@ Report inconsistencies between the specification, reference documents, and exist
 
 The existing prototype includes:
 
-- A configurable battlefield, currently configured as 16×16.
-- A single unit spawned at a hardcoded position.
-- A two-dimensional unit occupancy matrix.
-- Keyboard-based cursor navigation.
-- An action menu containing Move, Attack, and Wait.
-- UnitClass and UnitData definitions with Knight, Wizard, and Archer base-stat assets.
-- Per-unit current health initialized from UnitData.
-- The prototype unit prefab is configured with KnightData.
-- Manhattan-distance movement validation.
-- Blue movement range overlays.
-- Direct-line movement animation.
-- Input locking during movement animation.
-Current limitations include:
+- A configurable 16×16 battlefield, two-dimensional unit occupancy, and configured units for both teams.
+- Keyboard cursor navigation and an action menu containing Move, Attack, and Wait.
+- UnitClass and UnitData definitions for Knight, Wizard, and Archer, with per-instance current health initialized from shared UnitData.
+- Manhattan-distance movement validation, blue movement-range overlays, and tile-by-tile movement execution.
+- Combat, turn, and battle-resolution systems integrated by the later F06, F07, and F09 work: configured Manhattan attack ranges, per-instance damage and health, active-unit actions, unit defeat, and winner detection.
 
-- Team identity is not implemented.
-- Combat execution and health changes are not implemented.
-- No multi-unit spawning.
-- No obstacle-aware pathfinding.
-- Duplicated movement validation.
-- Restricted cursor navigation during movement selection.
-- Logical position updates before animation completion.
+The approved Dijkstra pathfinding and directional path preview are not
+implemented. Current movement reachability is unit-cost based; variable
+terrain costs and dedicated terrain obstacles remain pending. The F04 task
+statuses below are unchanged; this project-status update does not close those
+tasks or certify their acceptance tests.
 
 ## 4. Feature Scope
 
@@ -348,11 +338,13 @@ Movement cancellation during animation is not supported.
 
 ### FR-16 — Development Exception
 
-Consecutive movement actions must remain available for testing.
+Before F07, consecutive movement actions remained available for testing.
 
-Units from either team may be selected and moved during this development stage.
+Before turn management was implemented, units from either team could be
+selected and moved during this development stage.
 
-These exceptions will be removed when the turn management system is implemented.
+F07 Alpha 0.1.0 supersedes this temporary exception: only the active unit may
+act, and each unit may Move and Attack once per turn.
 
 ## 6. Technical Design
 
@@ -715,7 +707,8 @@ Acceptance:
 - Movement cannot be interrupted by player input.
 - Occupancy updates after animation completion.
 - The action menu reopens correctly.
-- Consecutive movement remains available for testing.
+- Consecutive movement was available for testing before F07; this criterion is
+  superseded by F07's per-turn action limits.
 
 ### F04-T10 — Integration, Testing, and Documentation
 
@@ -874,16 +867,21 @@ The AI formation must be selected independently of the player's composition.
 
 Future player-versus-player deployment must keep both formations hidden until preparation is complete.
 
-### Additional Future Features
+### Related Feature Status
 
-- F06 — Combat System.
-- F07 — Turn System.
-- F08 — Battle AI.
-- F09 — Battle Resolution.
-- Special terrain and movement modifiers.
-- Multiplayer.
+F06, F07, and F09 have an implemented and project-owner-validated Alpha 0.1.0
+core, with remaining work tracked in GAME_DESIGN.md and ARCHITECTURE.md:
 
-These references establish integration expectations and do not authorize implementation.
+| Feature | Alpha 0.1.0 status | Remaining work |
+|---|---|---|
+| F06 — Combat System | Attack ranges, damage, and unit defeat manually validated | Line of sight |
+| F07 — Turn System | Turn order, action restrictions, active-unit indicator, and cursor positioning manually validated | Turn animations |
+| F09 — Battle Resolution | Unit defeat and winner detection manually validated | Result UI, draw handling, main menu, and restart |
+
+F05 — Deployment System and F08 — Battle AI remain planned. Special terrain,
+movement modifiers, and multiplayer also remain future work.
+
+These related features do not expand the approved scope of F04.
 
 ## 12. Pending Decisions
 
@@ -915,3 +913,4 @@ Feature 04 is complete when:
 | Version | Description |
 |---|---|
 | 1.0.0 | Initial feature specification containing approved functional and architectural requirements. |
+| 1.1.0 | Updated current project implementation and related F06/F07/F09 status after Alpha 0.1.0 manual validation; retained open F04 task statuses. |

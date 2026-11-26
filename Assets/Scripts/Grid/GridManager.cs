@@ -20,8 +20,18 @@ public class GridManager : MonoBehaviour
     [Header("Movement Overlay")]
     [SerializeField] private GameObject movementOverlayPrefab;
 
+    [Header("Attack Overlay")]
+    [SerializeField] private GameObject attackOverlayPrefab;
+
     private List<GameObject> movementOverlays = new List<GameObject>();
+    private readonly HashSet<Unit> defeatedUnits = new HashSet<Unit>();
+    private GameObject activeUnitIndicator;
     private Unit[,] occupiedTiles;
+    internal CombatSystem Combat { get; private set; }
+    internal TurnManager Turns { get; private set; }
+    public BattleManager Battle { get; private set; }
+    private static readonly int BaseColorProperty = Shader.PropertyToID("_BaseColor");
+    private static readonly int ColorProperty = Shader.PropertyToID("_Color");
     private static readonly Vector2Int[] MovementDirections =
     {
         new Vector2Int(1, 0),
@@ -54,11 +64,31 @@ public class GridManager : MonoBehaviour
         public int Z => z;
     }
 
+    private void Awake()
+    {
+        Battle = new BattleManager();
+        Battle.BattleEnded += HandleBattleEnded;
+        Turns = new TurnManager();
+        Turns.ActiveUnitChanged += HandleActiveUnitChanged;
+        Combat = new CombatSystem(this, attackOverlayPrefab, Turns);
+
+        if (attackOverlayPrefab == null)
+        {
+            Debug.LogError(
+                "GridManager requires the AttackOverlay prefab for attack ranges and the active-unit indicator.",
+                this
+            );
+        }
+    }
+
     private void Start()
     {
         occupiedTiles = new Unit[width, height];
         GenerateGrid();
         SpawnConfiguredUnits();
+        List<Unit> units = GetRegisteredUnits();
+        Battle.BeginBattle(units);
+        Turns.BeginBattle(units);
     }
 
     private void GenerateGrid()
@@ -98,6 +128,7 @@ public class GridManager : MonoBehaviour
             unitObject.name = $"{definition.Class}_{definition.Team}_{i + 1}";
             unit.SetTeam(definition.Team);
             unit.SetPosition(definition.X, definition.Z);
+            unit.Defeated += HandleUnitDefeated;
             occupiedTiles[definition.X, definition.Z] = unit;
         }
     }
@@ -284,9 +315,31 @@ public class GridManager : MonoBehaviour
         return occupiedTiles[x, z];
     }
 
+    internal List<Unit> GetRegisteredUnits()
+    {
+        List<Unit> units = new List<Unit>();
+
+        if (occupiedTiles == null)
+            return units;
+
+        for (int x = 0; x < width; x++)
+        {
+            for (int z = 0; z < height; z++)
+            {
+                Unit unit = occupiedTiles[x, z];
+
+                if (unit != null)
+                    units.Add(unit);
+            }
+        }
+
+        return units;
+    }
+
     public bool MoveUnit(Unit unit, int targetX, int targetZ)
     {
-        if (unit == null || occupiedTiles == null || unit.IsMoving)
+        if (Battle.IsFinished || unit == null || unit.IsDefeated ||
+            occupiedTiles == null || unit.IsMoving)
             return false;
 
         if (!IsWithinBoard(targetX, targetZ) || IsTileOccupied(targetX, targetZ))
@@ -326,15 +379,35 @@ public class GridManager : MonoBehaviour
 
         foreach (Vector2Int destination in reachablePaths.Keys)
         {
-            Vector3 position = new Vector3(destination.x, 0.12f, destination.y);
-            GameObject overlay = Instantiate(
-                movementOverlayPrefab,
-                position,
-                Quaternion.identity,
-                transform
-            );
-            movementOverlays.Add(overlay);
+            CreateRangeOverlay(movementOverlayPrefab, destination, movementOverlays);
         }
+    }
+
+    private void CreateRangeOverlay(
+        GameObject prefab,
+        Vector2Int tile,
+        List<GameObject> overlays
+    )
+    {
+        Vector3 position = new Vector3(tile.x, 0.12f, tile.y);
+        GameObject overlay = Instantiate(
+            prefab,
+            position,
+            Quaternion.identity,
+            transform
+        );
+        overlays.Add(overlay);
+    }
+
+    private void ClearRangeOverlays(List<GameObject> overlays)
+    {
+        foreach (GameObject overlay in overlays)
+        {
+            if (overlay != null)
+                Destroy(overlay);
+        }
+
+        overlays.Clear();
     }
 
     private Dictionary<Vector2Int, List<Vector2Int>> GetReachablePaths(Unit unit)
@@ -446,9 +519,140 @@ public class GridManager : MonoBehaviour
             occupiedTiles[origin.x, origin.y] = null;
 
         occupiedTiles[unit.gridX, unit.gridZ] = unit;
+
+        if (Turns.IsActiveUnit(unit))
+            UpdateActiveUnitIndicator(unit);
     }
 
-    private bool IsWithinBoard(int x, int z)
+    private void HandleUnitDefeated(Unit unit)
+    {
+        if (unit == null || !defeatedUnits.Add(unit))
+            return;
+
+        unit.Defeated -= HandleUnitDefeated;
+        ClearUnitOccupancy(unit);
+
+        Battle.RegisterUnitDefeated(unit);
+        Turns.RemoveUnit(unit);
+        Destroy(unit.gameObject);
+    }
+
+    private void ClearUnitOccupancy(Unit unit)
+    {
+        if (occupiedTiles == null)
+            return;
+
+        for (int x = 0; x < width; x++)
+        {
+            for (int z = 0; z < height; z++)
+            {
+                if (occupiedTiles[x, z] == unit)
+                    occupiedTiles[x, z] = null;
+            }
+        }
+    }
+
+    private void HandleBattleEnded()
+    {
+        Turns.StopBattle();
+        ClearMovementRange();
+        Combat.ClearAttackRange();
+        ClearActiveUnitIndicator();
+    }
+
+    private void ClearActiveUnitIndicator()
+    {
+        if (activeUnitIndicator == null)
+            return;
+
+        Destroy(activeUnitIndicator);
+        activeUnitIndicator = null;
+    }
+
+    private void HandleActiveUnitChanged(Unit unit)
+    {
+        if (unit == null)
+        {
+            if (activeUnitIndicator != null)
+                activeUnitIndicator.SetActive(false);
+
+            return;
+        }
+
+        if (attackOverlayPrefab == null)
+            return;
+
+        if (activeUnitIndicator == null)
+        {
+            Vector3 position = new Vector3(unit.gridX, 0.12f, unit.gridZ);
+            activeUnitIndicator = Instantiate(
+                attackOverlayPrefab,
+                position,
+                Quaternion.identity,
+                transform
+            );
+            activeUnitIndicator.name = "ActiveUnitIndicator";
+            SetActiveUnitIndicatorColor();
+        }
+        else
+        {
+            UpdateActiveUnitIndicator(unit);
+        }
+
+        activeUnitIndicator.SetActive(true);
+    }
+
+    private void UpdateActiveUnitIndicator(Unit unit)
+    {
+        if (activeUnitIndicator == null || unit == null)
+            return;
+
+        activeUnitIndicator.transform.position =
+            new Vector3(unit.gridX, 0.12f, unit.gridZ);
+    }
+
+    private void SetActiveUnitIndicatorColor()
+    {
+        Renderer[] renderers =
+            activeUnitIndicator.GetComponentsInChildren<Renderer>(true);
+        MaterialPropertyBlock propertyBlock = new MaterialPropertyBlock();
+
+        foreach (Renderer renderer in renderers)
+        {
+            Material material = renderer.sharedMaterial;
+
+            if (material == null)
+                continue;
+
+            bool hasBaseColor = material.HasProperty(BaseColorProperty);
+            bool hasColor = material.HasProperty(ColorProperty);
+
+            if (!hasBaseColor && !hasColor)
+            {
+                Debug.LogWarning(
+                    $"Active unit indicator material '{material.name}' has no color property.",
+                    renderer
+                );
+                continue;
+            }
+
+            Color sourceColor = material.GetColor(
+                hasBaseColor ? BaseColorProperty : ColorProperty
+            );
+            Color indicatorColor = new Color(1f, 1f, 0f, sourceColor.a);
+            renderer.GetPropertyBlock(propertyBlock);
+
+            if (hasBaseColor)
+                propertyBlock.SetColor(BaseColorProperty, indicatorColor);
+
+            if (hasColor)
+                propertyBlock.SetColor(ColorProperty, indicatorColor);
+
+            renderer.SetPropertyBlock(propertyBlock);
+        }
+    }
+
+    internal bool IsWithinBoard(int x, int z)
     {
         return x >= 0 && x < width && z >= 0 && z < height;
     }
@@ -457,12 +661,7 @@ public class GridManager : MonoBehaviour
 
     public void ClearMovementRange()
     {
-        foreach (GameObject overlay in movementOverlays)
-        {
-            if (overlay != null)
-                Destroy(overlay);
-        }
-        movementOverlays.Clear();
+        ClearRangeOverlays(movementOverlays);
     }
 
 }
