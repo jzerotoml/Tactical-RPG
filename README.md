@@ -2,10 +2,6 @@
 
 A turn-based tactical RPG developed with Unity 6 and C#, inspired by classic tactical strategy games.
 
-# Tactical-RPG
-
-A turn-based tactical RPG developed with Unity 6 and C#, inspired by classic tactical strategy games.
-
 [![Play Demo](https://img.shields.io/badge/Play_Demo-Alpha_0.1.0-2EA44F?style=for-the-badge&logo=unity&logoColor=white)](https://jzerotoml.github.io/Tactical-RPG/)
 
 ![Unity](https://img.shields.io/badge/Unity-6-000000?style=flat-square&logo=unity)
