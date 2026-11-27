@@ -15,8 +15,6 @@ A turn-based tactical RPG developed with Unity 6 and C#, inspired by classic tac
 
 ## Overview
 
-## Overview
-
 Tactical-RPG is a personal game development project focused on grid-based combat, strategic positioning, and character classes with distinct combat roles.
 
 The project is currently in its early development stage.
